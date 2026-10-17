@@ -25,13 +25,29 @@ restore_env() {
     chvt 1 >/dev/null 2>&1
     if command -v swaymsg >/dev/null 2>&1; then
         swaymsg 'output DSI-1 power on, output DSI-2 power on' >/dev/null 2>&1
-        swaymsg '[app_id="emulationstation"] scratchpad show, floating enable, fullscreen disable, move absolute position 0 0, focus' >/dev/null 2>&1
+        python3 -c '
+import json, subprocess
+try:
+    tree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"]))
+    def find_es(node):
+        if node.get("app_id") == "emulationstation": return node
+        for child in node.get("nodes", []) + node.get("floating_nodes", []):
+            res = find_es(child)
+            if res: return res
+        return None
+    es = find_es(tree)
+    if es and not es.get("visible"):
+        subprocess.call(["swaymsg", "[app_id=\"emulationstation\"] scratchpad show"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.call(["swaymsg", "[app_id=\"emulationstation\"] focus"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+except Exception:
+    pass
+' >/dev/null 2>&1
     fi
     printf '\033[?25l' > /dev/tty0 2>/dev/null
     printf '\033[?25l' > /dev/tty1 2>/dev/null
     printf '\033[?25l' > /dev/tty2 2>/dev/null
     echo 0 > /sys/class/graphics/fbcon/cursor_blink 2>/dev/null
-    sudo -n systemctl restart oga_events >/dev/null 2>&1 &
+    return 0
 }
 trap restore_env EXIT HUP INT TERM
 
