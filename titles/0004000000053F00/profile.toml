@@ -1,1 +1,5 @@
 name = "Super Mario 3D Land"
+
+# the frames a 30 fps cap never shows left undrawn
+[advanced]
+shown_only = true

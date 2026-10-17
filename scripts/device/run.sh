@@ -39,6 +39,7 @@ if command -v swaymsg >/dev/null 2>&1; then
     swaymsg 'output DSI-1 power on' >/dev/null 2>&1
     chvt 2 >/dev/null 2>&1
 fi
+"$dir/power.sh" performance
 sudo -n sh -c "echo 1 > /proc/sys/debug/exception-trace" 2>/dev/null
 cd "$game"
 while true; do
