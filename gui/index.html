@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NativeRG3DS Studio - Portador 3DS para Anbernic RG DS</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#ecfeff',
+                            100: '#cffafe',
+                            400: '#22d3ee',
+                            500: '#06b6d4',
+                            600: '#0891b2',
+                            900: '#164e63',
+                        },
+                        darkbg: '#0f172a',
+                        cardbg: '#1e293b',
+                        inputbg: '#0f172a'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbars */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .console-term {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-100 min-h-screen flex flex-col antialiased">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-cardbg border-b border-slate-700/60 shadow-lg px-6 py-4 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <!-- Dual Screen Icon -->
+                <div class="bg-gradient-to-tr from-cyan-600 to-indigo-600 p-2.5 rounded-xl shadow-md flex items-center justify-center">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <rect x="5" y="2" width="14" height="8" rx="2" stroke-width="2"/>
+                        <rect x="5" y="14" width="14" height="8" rx="2" stroke-width="2"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <h1 class="text-xl font-bold tracking-tight text-white">NativeRG3DS <span class="text-cyan-400">Studio</span></h1>
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800">RG DS ROCKNIX</span>
+                    </div>
+                    <p class="text-xs text-slate-400">Portador AOT e Otimizador de Nintendo 3DS para Anbernic RG DS</p>
+                </div>
+            </div>
+
+            <!-- Handheld Connection Badge & IP Control -->
+            <div class="flex items-center space-x-3 bg-darkbg/80 border border-slate-700 rounded-xl px-4 py-2">
+                <div class="flex items-center space-x-2">
+                    <div id="statusDot" class="w-3 h-3 rounded-full bg-amber-400 animate-pulse"></div>
+                    <span id="statusText" class="text-xs font-medium text-slate-300">Verificando...</span>
+                </div>
+                <div class="h-4 w-px bg-slate-700"></div>
+                <div class="flex items-center space-x-1.5">
+                    <label class="text-xs text-slate-400">IP:</label>
+                    <input type="text" id="handheldIp" value="192.168.0.100" class="bg-cardbg text-xs text-slate-200 border border-slate-600 rounded px-2 py-1 w-28 focus:outline-none focus:border-cyan-500 font-mono text-center">
+                    <button onclick="checkConnection()" title="Testar Conexão com RG DS" class="p-1 hover:bg-slate-700 rounded text-slate-300 hover:text-white transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <div class="bg-cardbg/40 border-b border-slate-800 px-6">
+        <div class="max-w-7xl mx-auto flex space-x-6">
+            <button onclick="switchTab('port')" id="tabBtnPort" class="tab-btn py-3 px-2 border-b-2 border-cyan-400 text-cyan-400 font-medium text-sm flex items-center space-x-2 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>Portar Jogo (1-Click)</span>
+            </button>
+            <button onclick="switchTab('manage')" id="tabBtnManage" class="tab-btn py-3 px-2 border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium text-sm flex items-center space-x-2 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                <span>Gerenciador do RG DS</span>
+            </button>
+            <button onclick="switchTab('guide')" id="tabBtnGuide" class="tab-btn py-3 px-2 border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium text-sm flex items-center space-x-2 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>Guia & Atalhos</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+
+        <!-- TAB 1: PORTAR JOGO -->
+        <div id="tabPort" class="space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                <!-- Coluna Esquerda: Configuração e ROM (7 cols) -->
+                <div class="lg:col-span-7 space-y-6">
+
+                    <!-- Passo 1: Seleção da ROM -->
+                    <div class="bg-cardbg border border-slate-700/60 rounded-2xl p-5 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-base font-semibold text-white flex items-center space-x-2">
+                                <span class="w-6 h-6 rounded-full bg-cyan-600 text-white flex items-center justify-center text-xs font-bold">1</span>
+                                <span>Selecionar ROM Decriptada (.3ds, .cci, .cia)</span>
+                            </h2>
+                            <button onclick="pickFile()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-medium text-slate-200 rounded-lg flex items-center space-x-1.5 transition">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                                <span>Procurar Arquivo...</span>
+                            </button>
+                        </div>
+
+                        <div class="flex space-x-2">
+                            <input type="text" id="romPathInput" placeholder="Caminho completo da ROM (ex: /home/tiago/Downloads/jogo.3ds)" class="flex-1 bg-inputbg border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 font-mono">
+                            <button onclick="inspectRom()" id="btnInspect" class="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-sm rounded-xl transition flex items-center space-x-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                <span>Inspecionar</span>
+                            </button>
+                        </div>
+
+                        <!-- Card de Resultado da Inspeção da ROM -->
+                        <div id="romInfoCard" class="hidden bg-darkbg/90 border border-slate-700 rounded-xl p-4 space-y-3">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <div class="text-xs text-slate-400 font-medium">Nome do Jogo para o Lançador:</div>
+                                    <input type="text" id="gameNameInput" class="text-base font-bold bg-transparent border-b border-cyan-500/50 focus:border-cyan-400 focus:outline-none text-white w-full py-1 mt-0.5">
+                                </div>
+                                <span id="romDecryptedBadge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800">Decriptado</span>
+                            </div>
+
+                            <div class="grid grid-cols-3 gap-2 text-xs pt-1 border-t border-slate-800">
+                                <div>
+                                    <span class="text-slate-400 block">Title ID:</span>
+                                    <span id="romTitleId" class="font-mono text-cyan-300 font-semibold">-</span>
+                                </div>
+                                <div>
+                                    <span class="text-slate-400 block">Product Code:</span>
+                                    <span id="romProductCode" class="font-mono text-slate-200 font-semibold">-</span>
+                                </div>
+                                <div>
+                                    <span class="text-slate-400 block">Tamanho:</span>
+                                    <span id="romSize" class="text-slate-200 font-semibold">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Passo 2: Otimizações e Perfil para RG DS -->
+                    <div class="bg-cardbg border border-slate-700/60 rounded-2xl p-5 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-base font-semibold text-white flex items-center space-x-2">
+                                <span class="w-6 h-6 rounded-full bg-cyan-600 text-white flex items-center justify-center text-xs font-bold">2</span>
+                                <span>Otimizações de Desempenho (Perfil RG DS)</span>
+                            </h2>
+                            <span class="text-xs text-slate-400">Ajustado para Rockchip RK3566 + Mali-G52</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+                            <label class="flex items-start space-x-3 p-3 bg-darkbg/60 border border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 transition">
+                                <input type="checkbox" id="optShownOnly" checked class="mt-0.5 rounded border-slate-700 text-cyan-500 focus:ring-cyan-500">
+                                <div>
+                                    <span class="font-semibold text-slate-200 block">shown_only (Otimizar 30 FPS)</span>
+                                    <span class="text-slate-400">Pula renderização na GPU de quadros descartados pelo limitador de 30 FPS (economiza ~50% GPU).</span>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start space-x-3 p-3 bg-darkbg/60 border border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 transition">
+                                <input type="checkbox" id="optSkipBottom" checked class="mt-0.5 rounded border-slate-700 text-cyan-500 focus:ring-cyan-500">
+                                <div>
+                                    <span class="font-semibold text-slate-200 block">skip_bottom (Pular Tela Inferior Estática)</span>
+                                    <span class="text-slate-400">Desenha a tela inferior menos vezes quando estiver parada (itens/mapas), poupando CPU/GPU.</span>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start space-x-3 p-3 bg-darkbg/60 border border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 transition">
+                                <input type="checkbox" id="optCull" checked class="mt-0.5 rounded border-slate-700 text-cyan-500 focus:ring-cyan-500">
+                                <div>
+                                    <span class="font-semibold text-slate-200 block">cull (Frustum Culling)</span>
+                                    <span class="text-slate-400">Oculta geometrias e polígonos que não estão no campo de visão das câmeras.</span>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start space-x-3 p-3 bg-darkbg/60 border border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 transition">
+                                <input type="checkbox" id="optHalfPrecision" checked class="mt-0.5 rounded border-slate-700 text-cyan-500 focus:ring-cyan-500">
+                                <div>
+                                    <span class="font-semibold text-slate-200 block">half_precision (Cores FP16)</span>
+                                    <span class="text-slate-400">Processa cores de fragmento em meia precisão FP16 (muito mais rápido na GPU Mali-G52).</span>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start space-x-3 p-3 bg-darkbg/60 border border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 transition">
+                                <input type="checkbox" id="optPlainMath" checked class="mt-0.5 rounded border-slate-700 text-cyan-500 focus:ring-cyan-500">
+                                <div>
+                                    <span class="font-semibold text-slate-200 block">plain_math (Matemática Rápida)</span>
+                                    <span class="text-slate-400">Matemática acelerada de vértices. Desative apenas se polígonos ficarem esticados em pontas.</span>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start space-x-3 p-3 bg-darkbg/60 border border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 transition">
+                                <input type="checkbox" id="optSkipRightEye" checked class="mt-0.5 rounded border-slate-700 text-cyan-500 focus:ring-cyan-500">
+                                <div>
+                                    <span class="font-semibold text-slate-200 block">skip_right_eye (Sem Imagem 3D Olho Direito)</span>
+                                    <span class="text-slate-400">Descarta a segunda visão 3D estereoscópica desnecessária em telas 2D.</span>
+                                </div>
+                            </label>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-2">
+                            <span class="text-xs text-slate-300 font-medium">Limite Máximo de Pulo de Quadros Dinâmico (frame_skip):</span>
+                            <select id="optFrameSkip" class="bg-inputbg border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-cyan-300 focus:outline-none focus:border-cyan-500">
+                                <option value="0">0 (Nenhum pulo - trava o áudio se atrasar)</option>
+                                <option value="1">1 quadro por vez</option>
+                                <option value="2">2 quadros por vez</option>
+                                <option value="3" selected>3 quadros por vez (Recomendado)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Passo 3: Ação de Recompilação & Deploy -->
+                    <div class="bg-cardbg border border-slate-700/60 rounded-2xl p-5 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-base font-semibold text-white flex items-center space-x-2">
+                                <span class="w-6 h-6 rounded-full bg-cyan-600 text-white flex items-center justify-center text-xs font-bold">3</span>
+                                <span>Construção & Envio Automático</span>
+                            </h2>
+                            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                                <input type="checkbox" id="chkAutoDeploy" checked class="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500">
+                                <span>Enviar automaticamente para o RG DS via SCP</span>
+                            </label>
+                        </div>
+
+                        <button onclick="startBuild()" id="btnStartBuild" class="w-full py-4 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-base rounded-xl shadow-lg shadow-cyan-900/40 transition flex items-center justify-center space-x-2.5">
+                            <svg class="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            <span>Iniciar Recompilação e Portar para RG DS</span>
+                        </button>
+                    </div>
+
+                </div>
+
+                <!-- Coluna Direita: Progresso e Terminal ao Vivo (5 cols) -->
+                <div class="lg:col-span-5 space-y-6 flex flex-col">
+                    <div class="bg-cardbg border border-slate-700/60 rounded-2xl p-5 shadow-sm space-y-4 flex-1 flex flex-col min-h-[480px]">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-semibold text-white flex items-center space-x-2">
+                                <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                <span>Terminal de Compilação & Logs</span>
+                            </h3>
+                            <button onclick="clearLogs()" class="text-xs text-slate-400 hover:text-slate-200">Limpar</button>
+                        </div>
+
+                        <!-- Barra de Progresso -->
+                        <div class="space-y-1.5">
+                            <div class="flex justify-between text-xs font-medium">
+                                <span id="progressStep" class="text-slate-300">Aguardando comando...</span>
+                                <span id="progressPercent" class="text-cyan-400">0%</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                                <div id="progressBar" class="bg-gradient-to-r from-cyan-500 to-indigo-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Terminal stdout/stderr -->
+                        <div id="terminalWindow" class="console-term flex-1 bg-black/80 border border-slate-800 rounded-xl p-3 text-xs text-slate-300 overflow-y-auto max-h-[420px] space-y-1 select-text">
+                            <div class="text-slate-500">// Pronto. Selecione uma ROM e clique em Iniciar.</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- TAB 2: GERENCIADOR DO RG DS -->
+        <div id="tabManage" class="hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                <!-- Card Status Portátil -->
+                <div class="bg-cardbg border border-slate-700/60 rounded-2xl p-5 space-y-3">
+                    <h3 class="text-sm font-semibold text-white flex items-center space-x-2">
+                        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        <span>Estado do Dispositivo</span>
+                    </h3>
+                    <div class="space-y-2 text-xs">
+                        <div class="flex justify-between py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Armazenamento /storage:</span>
+                            <span id="devStorage" class="font-semibold text-slate-200">Verificando...</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Bateria:</span>
+                            <span id="devBattery" class="font-semibold text-slate-200">Verificando...</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-800">
+                            <span class="text-slate-400">GPU Mali Freq:</span>
+                            <span id="devGpuFreq" class="font-semibold text-cyan-400">Verificando...</span>
+                        </div>
+                        <div class="flex justify-between py-1">
+                            <span class="text-slate-400">Conexão SSH:</span>
+                            <span id="devSsh" class="font-semibold text-emerald-400">root@192.168.0.100</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card Ações Rápidas -->
+                <div class="bg-cardbg border border-slate-700/60 rounded-2xl p-5 space-y-3 md:col-span-2">
+                    <h3 class="text-sm font-semibold text-white flex items-center space-x-2">
+                        <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
+                        <span>Controles Remotos no RG DS</span>
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                        <button onclick="remoteAction('focus_es')" class="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold rounded-xl transition flex items-center justify-center space-x-1.5 text-slate-200">
+                            <span>🔄 Restaurar Menu ES</span>
+                        </button>
+                        <button onclick="remoteAction('performance')" class="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold rounded-xl transition flex items-center justify-center space-x-1.5 text-cyan-300">
+                            <span>⚡ Forçar Modo Performance</span>
+                        </button>
+                        <button onclick="remoteAction('kill_game')" class="px-3 py-2.5 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800 text-xs font-semibold rounded-xl transition flex items-center justify-center space-x-1.5 text-rose-300">
+                            <span>🛑 Fechar Jogo Ativo</span>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Jogos Instalados e Logs Remotos -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Lista de Jogos (5 cols) -->
+                <div class="lg:col-span-5 bg-cardbg border border-slate-700/60 rounded-2xl p-5 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-semibold text-white">Jogos 3DS Instalados no Console</h3>
+                        <button onclick="loadInstalledGames()" class="text-xs text-cyan-400 hover:underline">Atualizar</button>
+                    </div>
+                    <div id="installedGamesList" class="space-y-2 text-xs">
+                        <div class="text-slate-500 py-4 text-center">Carregando jogos...</div>
+                    </div>
+                </div>
+
+                <!-- Visualizador de Logs do Jogo (7 cols) -->
+                <div class="lg:col-span-7 bg-cardbg border border-slate-700/60 rounded-2xl p-5 space-y-4 flex flex-col min-h-[400px]">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-semibold text-white flex items-center space-x-2">
+                            <span>Log de Execução do Jogo (data/log.txt)</span>
+                        </h3>
+                        <button onclick="refreshGameLog()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 rounded border border-slate-700 transition">Recarregar Log</button>
+                    </div>
+                    <div id="gameLogViewer" class="console-term flex-1 bg-black/80 border border-slate-800 rounded-xl p-3 text-xs text-slate-300 overflow-y-auto max-h-[420px] space-y-1">
+                        <div class="text-slate-500">// Selecione um jogo acima e clique em 'Ver Log'</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: GUIA & ATALHOS -->
+        <div id="tabGuide" class="hidden space-y-6">
+            <div class="bg-cardbg border border-slate-700/60 rounded-2xl p-6 space-y-4">
+                <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+                    <span class="text-cyan-400">🎮</span>
+                    <span>Guia de Uso & Controles no Anbernic RG DS</span>
+                </h2>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300 pt-2">
+                    <div class="space-y-3 bg-darkbg/60 border border-slate-800 p-4 rounded-xl">
+                        <h3 class="font-semibold text-white text-base">Atalhos dos Botões no RG DS</h3>
+                        <ul class="space-y-2 text-xs">
+                            <li><strong class="text-cyan-300">Botão FN (Home):</strong> Toque rápido abre ou fecha o Menu de Opções durante o jogo.</li>
+                            <li><strong class="text-cyan-300">FN + START:</strong> Encerra o jogo e volta para o menu do EmulationStation.</li>
+                            <li><strong class="text-cyan-300">Botão L2 (Toque Rápido):</strong> Alterna entre a tela superior e inferior.</li>
+                            <li><strong class="text-cyan-300">FN + R1:</strong> Alterna visualização (Duas telas ou tela cheia).</li>
+                            <li><strong class="text-cyan-300">Analógico Direito:</strong> Move o cursor de toque na tela inferior.</li>
+                            <li><strong class="text-cyan-300">Botão R2:</strong> Simula o toque na tela onde estiver o cursor.</li>
+                            <li><strong class="text-cyan-300">Touchscreen Físico:</strong> Funciona diretamente com o dedo ou caneta stylus na tela inferior!</li>
+                        </ul>
+                    </div>
+
+                    <div class="space-y-3 bg-darkbg/60 border border-slate-800 p-4 rounded-xl">
+                        <h3 class="font-semibold text-white text-base">Como Decriptar ROMs de 3DS</h3>
+                        <p class="text-xs text-slate-400">O recompiler necessita de arquivos decriptados para ler as instruções nativas:</p>
+                        <ol class="list-decimal list-inside space-y-1.5 text-xs">
+                            <li>Insira o cartão SD no seu console 3DS real com CFW (Luma3DS).</li>
+                            <li>Ligue segurando <strong class="text-slate-200">START</strong> para entrar no <strong class="text-cyan-300">GodMode9</strong>.</li>
+                            <li>Navegue até o seu jogo (.3ds ou instalado em SD).</li>
+                            <li>Aperte <strong class="text-slate-200">A</strong> e selecione <strong class="text-emerald-400">"NCCH image options..." -> "Decrypt file (...)"</strong>.</li>
+                            <li>Copie o arquivo decriptado para o seu computador e selecione aqui no Studio!</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-cardbg border-t border-slate-800 py-3 px-6 text-center text-xs text-slate-500">
+        NativeRG3DS Studio • Desenvolvido com carinho para o Anbernic RG DS (ROCKNIX) • Pocket Native Engine
+    </footer>
+
+    <!-- App JavaScript Logic -->
+    <script>
+        let currentTab = 'port';
+        let selectedRomInfo = null;
+        let selectedGameId = '0004000000053F00';
+        let buildPollTimer = null;
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.getElementById('tabPort').classList.toggle('hidden', tab !== 'port');
+            document.getElementById('tabManage').classList.toggle('hidden', tab !== 'manage');
+            document.getElementById('tabGuide').classList.toggle('hidden', tab !== 'guide');
+
+            const btns = {
+                port: document.getElementById('tabBtnPort'),
+                manage: document.getElementById('tabBtnManage'),
+                guide: document.getElementById('tabBtnGuide')
+            };
+
+            for (const [k, btn] of Object.entries(btns)) {
+                if (k === tab) {
+                    btn.classList.add('border-cyan-400', 'text-cyan-400');
+                    btn.classList.remove('border-transparent', 'text-slate-400');
+                } else {
+                    btn.classList.remove('border-cyan-400', 'text-cyan-400');
+                    btn.classList.add('border-transparent', 'text-slate-400');
+                }
+            }
+
+            if (tab === 'manage') {
+                loadInstalledGames();
+                checkConnection();
+            }
+        }
+
+        async function checkConnection() {
+            const ip = document.getElementById('handheldIp').value.trim();
+            const dot = document.getElementById('statusDot');
+            const txt = document.getElementById('statusText');
+            
+            dot.className = 'w-3 h-3 rounded-full bg-amber-400 animate-pulse';
+            txt.innerText = 'Verificando...';
+
+            try {
+                const res = await fetch(`/api/status?ip=${encodeURIComponent(ip)}`);
+                const data = await res.json();
+                if (data.online) {
+                    dot.className = 'w-3 h-3 rounded-full bg-emerald-400';
+                    txt.innerText = `Online (${data.free_storage} livres)`;
+                    document.getElementById('devStorage').innerText = data.free_storage;
+                    document.getElementById('devBattery').innerText = data.battery;
+                    document.getElementById('devGpuFreq').innerText = data.gpu_freq;
+                    document.getElementById('devSsh').innerText = `root@${ip}`;
+                } else {
+                    dot.className = 'w-3 h-3 rounded-full bg-rose-500';
+                    txt.innerText = 'Em Repouso / Offline';
+                    document.getElementById('devStorage').innerText = 'Inacessível';
+                    document.getElementById('devBattery').innerText = 'Inacessível';
+                    document.getElementById('devGpuFreq').innerText = 'Inacessível';
+                }
+            } catch (e) {
+                dot.className = 'w-3 h-3 rounded-full bg-rose-500';
+                txt.innerText = 'Erro de rede';
+            }
+        }
+
+        async function pickFile() {
+            try {
+                const res = await fetch('/api/pick_file', { method: 'POST' });
+                const data = await res.json();
+                if (data.path) {
+                    document.getElementById('romPathInput').value = data.path;
+                    inspectRom();
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function inspectRom() {
+            const path = document.getElementById('romPathInput').value.trim();
+            if (!path) return alert('Por favor, informe ou selecione o caminho do arquivo da ROM.');
+            
+            const btn = document.getElementById('btnInspect');
+            btn.disabled = true;
+            btn.innerText = 'Lendo...';
+
+            try {
+                const res = await fetch('/api/inspect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path })
+                });
+                const data = await res.json();
+                if (data.error) {
+                    alert('Erro na ROM: ' + data.error);
+                } else {
+                    selectedRomInfo = data;
+                    document.getElementById('romInfoCard').classList.remove('hidden');
+                    document.getElementById('gameNameInput').value = data.name;
+                    document.getElementById('romTitleId').innerText = data.title_id;
+                    document.getElementById('romProductCode').innerText = data.product_code;
+                    document.getElementById('romSize').innerText = data.size_mb + ' MB';
+                    
+                    const decBadge = document.getElementById('romDecryptedBadge');
+                    if (data.decrypted) {
+                        decBadge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800';
+                        decBadge.innerText = 'Decriptado ✓';
+                    } else {
+                        decBadge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-950 text-rose-300 border border-rose-800';
+                        decBadge.innerText = 'Encriptado (Necessita Decriptar)';
+                    }
+
+                    // Preencher opções se houver profile
+                    if (data.profile) {
+                        document.getElementById('optShownOnly').checked = data.profile.shown_only !== false;
+                        document.getElementById('optSkipBottom').checked = data.profile.skip_bottom !== false;
+                        document.getElementById('optCull').checked = data.profile.cull !== false;
+                        document.getElementById('optHalfPrecision').checked = data.profile.half_precision !== false;
+                        document.getElementById('optPlainMath').checked = data.profile.plain_math !== false;
+                        document.getElementById('optSkipRightEye').checked = data.profile.skip_right_eye !== false;
+                        document.getElementById('optFrameSkip').value = data.profile.frame_skip || 3;
+                    }
+                }
+            } catch (e) {
+                alert('Falha na requisição: ' + e);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg><span>Inspecionar</span>`;
+            }
+        }
+
+        async function startBuild() {
+            const romPath = document.getElementById('romPathInput').value.trim();
+            if (!romPath) return alert('Selecione uma ROM antes de iniciar!');
+            
+            const name = document.getElementById('gameNameInput').value.trim() || 'Jogo 3DS';
+            const ip = document.getElementById('handheldIp').value.trim();
+            const deploy = document.getElementById('chkAutoDeploy').checked;
+
+            const options = {
+                shown_only: document.getElementById('optShownOnly').checked,
+                skip_bottom: document.getElementById('optSkipBottom').checked,
+                cull: document.getElementById('optCull').checked,
+                half_precision: document.getElementById('optHalfPrecision').checked,
+                plain_math: document.getElementById('optPlainMath').checked,
+                skip_right_eye: document.getElementById('optSkipRightEye').checked,
+                frame_skip: parseInt(document.getElementById('optFrameSkip').value, 10)
+            };
+
+            const btn = document.getElementById('btnStartBuild');
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            try {
+                const res = await fetch('/api/build', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        rom_path: romPath,
+                        name: name,
+                        options: options,
+                        ip: ip,
+                        deploy: deploy
+                    })
+                });
+                const data = await res.json();
+                if (data.error) {
+                    alert('Não foi possível iniciar: ' + data.error);
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    pollBuildLogs();
+                }
+            } catch (e) {
+                alert('Erro ao iniciar build: ' + e);
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        function pollBuildLogs() {
+            if (buildPollTimer) clearInterval(buildPollTimer);
+            buildPollTimer = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/build_state');
+                    const state = await res.json();
+                    
+                    document.getElementById('progressStep').innerText = state.step || 'Compilando...';
+                    document.getElementById('progressPercent').innerText = state.progress + '%';
+                    document.getElementById('progressBar').style.width = state.progress + '%';
+
+                    const term = document.getElementById('terminalWindow');
+                    term.innerHTML = state.logs.map(l => {
+                        let colorClass = 'text-slate-300';
+                        if (l.includes('ERRO')) colorClass = 'text-rose-400 font-bold';
+                        else if (l.includes('---')) colorClass = 'text-cyan-400 font-semibold';
+                        else if (l.includes('SUCCESS') || l.includes('SUCESSO')) colorClass = 'text-emerald-400 font-bold';
+                        return `<div class="${colorClass}">${escapeHtml(l)}</div>`;
+                    }).join('');
+                    term.scrollTop = term.scrollHeight;
+
+                    if (!state.running) {
+                        clearInterval(buildPollTimer);
+                        buildPollTimer = null;
+                        const btn = document.getElementById('btnStartBuild');
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+                        if (state.success) {
+                            alert('🎉 Port Concluído com Sucesso! O jogo já está pronto no seu Anbernic RG DS.');
+                        } else if (state.error) {
+                            alert('❌ Erro na compilação: ' + state.error);
+                        }
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            }, 1000);
+        }
+
+        function clearLogs() {
+            document.getElementById('terminalWindow').innerHTML = '<div class="text-slate-500">// Logs limpos.</div>';
+        }
+
+        async function loadInstalledGames() {
+            const ip = document.getElementById('handheldIp').value.trim();
+            const listEl = document.getElementById('installedGamesList');
+            listEl.innerHTML = '<div class="text-slate-400 text-center py-2">Consultando console...</div>';
+
+            try {
+                const res = await fetch(`/api/list_games?ip=${encodeURIComponent(ip)}`);
+                const data = await res.json();
+                if (!data.games || data.games.length === 0) {
+                    listEl.innerHTML = '<div class="text-slate-500 text-center py-4">Nenhum jogo 3DS encontrado ainda em /storage/roms/ports/</div>';
+                    return;
+                }
+                listEl.innerHTML = data.games.map(g => `
+                    <div class="p-3 bg-darkbg border border-slate-800 rounded-xl flex items-center justify-between hover:border-slate-700 transition">
+                        <div>
+                            <div class="font-bold text-white text-sm">${escapeHtml(g.name)}</div>
+                            <div class="font-mono text-xs text-cyan-400">${g.id}</div>
+                        </div>
+                        <button onclick="selectGameForLog('${g.id}')" class="px-2.5 py-1 bg-cyan-900/60 hover:bg-cyan-800 text-cyan-200 border border-cyan-700 rounded-lg text-xs font-medium transition">
+                            Ver Logs
+                        </button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                listEl.innerHTML = '<div class="text-rose-400 text-center py-4">Falha ao consultar jogos via SSH.</div>';
+            }
+        }
+
+        function selectGameForLog(id) {
+            selectedGameId = id;
+            refreshGameLog();
+        }
+
+        async function refreshGameLog() {
+            const ip = document.getElementById('handheldIp').value.trim();
+            const logViewer = document.getElementById('gameLogViewer');
+            logViewer.innerHTML = `<div class="text-slate-400">Carregando log para ${selectedGameId}...</div>`;
+
+            try {
+                const res = await fetch(`/api/game_log?ip=${encodeURIComponent(ip)}&id=${selectedGameId}`);
+                const data = await res.json();
+                if (data.log) {
+                    logViewer.innerHTML = `<pre class="whitespace-pre-wrap leading-relaxed">${escapeHtml(data.log)}</pre>`;
+                    logViewer.scrollTop = logViewer.scrollHeight;
+                } else {
+                    logViewer.innerHTML = '<div class="text-slate-500">// Nenhum log registrado ainda para este jogo.</div>';
+                }
+            } catch (e) {
+                logViewer.innerHTML = `<div class="text-rose-400">Erro ao carregar log: ${e}</div>`;
+            }
+        }
+
+        async function remoteAction(action) {
+            const ip = document.getElementById('handheldIp').value.trim();
+            try {
+                const res = await fetch('/api/remote_action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, ip })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Ação executada com sucesso no RG DS!');
+                } else {
+                    alert('Erro na execução: ' + data.error);
+                }
+            } catch (e) {
+                alert('Falha na comunicação: ' + e);
+            }
+        }
+
+        function escapeHtml(text) {
+            return (text || '').replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        }
+
+        // Checar conexão logo ao abrir
+        window.addEventListener('DOMContentLoaded', () => {
+            checkConnection();
+            setInterval(checkConnection, 15000);
+        });
+    </script>
+</body>
+</html>
