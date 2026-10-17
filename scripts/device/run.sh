@@ -14,6 +14,25 @@ export POCKET_NATIVE_TITLES="$dir/titles" POCKET_NATIVE_POWER="$dir/power.sh" PO
 # draws to leave out besides the game's options, as ZAKURO_DROP_DRAWS takes them
 [ -f "$data/drops.txt" ] && export ZAKURO_DROP_DRAWS="$(cat "$data/drops.txt")"
 
+SWAY_ACTIVE=0
+if command -v swaymsg >/dev/null 2>&1; then
+    swaymsg 'output DSI-1 power on' >/dev/null 2>&1
+    chvt 2 >/dev/null 2>&1
+    SWAY_ACTIVE=1
+fi
+
+restore_env() {
+    "$dir/power.sh" balanced
+    if [ "$SWAY_ACTIVE" -eq 1 ]; then
+        chvt 1 >/dev/null 2>&1
+        swaymsg 'output DSI-1 power on, output DSI-2 power on' >/dev/null 2>&1
+        swaymsg '[app_id="emulationstation"] scratchpad show, floating enable, fullscreen disable, move absolute position 0 0, focus' >/dev/null 2>&1
+    fi
+    [ -n "$es" ] && kill -CONT $es 2>/dev/null
+    sudo -n systemctl restart oga_events >/dev/null 2>&1 &
+}
+trap restore_env EXIT HUP INT TERM
+
 es=$(pgrep -f "^/usr/bin/emulationstation/emulationstation( |$)" || true)
 [ -n "$es" ] && kill -STOP $es
 sudo -n sh -c "echo 1 > /proc/sys/debug/exception-trace" 2>/dev/null
@@ -27,7 +46,4 @@ if [ $status -ne 0 ]; then
     echo "exit status $status" >> "$data/log.txt"
     dmesg | tail -40 >> "$data/log.txt"
 fi
-"$dir/power.sh" balanced
-[ -n "$es" ] && kill -CONT $es
-sudo -n systemctl restart oga_events >/dev/null 2>&1 &
 exit 0

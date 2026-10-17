@@ -1010,6 +1010,26 @@ fn monotonic_micros() -> u64 {
 
 const GBM_FORMAT_XRGB8888: u32 = 0x3432_5258;
 
+#[derive(Clone, Copy)]
+struct KmsScreen {
+    crtc: u32,
+    connector: u32,
+    mode: DrmModeInfo,
+    offset_x: u32,
+    offset_y: u32,
+}
+
+static PHYSICAL_PANEL_SIZE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+pub fn physical_panel_size() -> (i32, i32) {
+    let val = PHYSICAL_PANEL_SIZE.load(std::sync::atomic::Ordering::Relaxed);
+    if val != 0 {
+        ((val & 0xFFFFFFFF) as i32, (val >> 32) as i32)
+    } else {
+        (640, 480)
+    }
+}
+
 /// the panel, driven through KMS from a GBM surface the context draws into.
 struct Kms {
     drm: libloading::Library,
@@ -1017,11 +1037,12 @@ struct Kms {
     fd: i32,
     device: *mut c_void,
     surface: *mut c_void,
-    crtc: u32,
-    connector: u32,
-    mode: DrmModeInfo,
+    screens: Vec<KmsScreen>,
+    width: u32,
+    height: u32,
     shown: Option<(*mut c_void, u32)>,
     pending: Option<(*mut c_void, u32)>,
+    pending_flips: u32,
     set: bool,
     /// how many pictures stayed up for 1, 2, 3 and 4 or more panel
     /// refreshes, logged every few seconds: at an even frame rate they all
@@ -1067,7 +1088,7 @@ impl Kms {
             return Err("no KMS resources".into());
         }
         let res = &*resources;
-        let mut found = None;
+        let mut found_screens = Vec::new();
         for i in 0..res.count_connectors as usize {
             let connector = call!(drm, "drmModeGetConnector", fn(i32, u32) -> *mut DrmModeConnector, fd, *res.connectors.add(i));
             if connector.is_null() {
@@ -1083,41 +1104,59 @@ impl Kms {
                     crtc = (*encoder).crtc_id;
                     call!(drm, "drmModeFreeEncoder", fn(*mut DrmModeEncoder) -> (), encoder);
                 }
-                if crtc == 0 && res.count_crtcs > 0 {
-                    crtc = *res.crtcs;
+                if crtc == 0 && (i < res.count_crtcs as usize) {
+                    crtc = *res.crtcs.add(i);
                 }
-                found = Some((c.connector_id, mode, crtc));
+                found_screens.push((c.connector_id, c.connector_type_id, mode, crtc));
             }
             call!(drm, "drmModeFreeConnector", fn(*mut DrmModeConnector) -> (), connector);
-            if found.is_some() {
-                break;
-            }
         }
         call!(drm, "drmModeFreeResources", fn(*mut DrmModeRes) -> (), resources);
-        let (connector, mode, crtc) = found.ok_or("no connected display")?;
+        if found_screens.is_empty() {
+            return Err("no connected display".into());
+        }
+        if found_screens.len() >= 2 {
+            // Sort so top screen (e.g. DSI-2) is first, bottom screen (DSI-1) is second
+            found_screens.sort_by_key(|s| std::cmp::Reverse(s.1));
+        }
+        let width = found_screens[0].2.hdisplay as u32;
+        let mut total_height = 0u32;
+        let mut screens = Vec::new();
+        for (connector_id, _type_id, mode, crtc) in found_screens {
+            screens.push(KmsScreen {
+                crtc,
+                connector: connector_id,
+                mode,
+                offset_x: 0,
+                offset_y: total_height,
+            });
+            total_height += mode.vdisplay as u32;
+        }
+        let mode = screens[0].mode;
         let refresh = mode.clock as f64 * 1000.0 / (mode.htotal as f64 * mode.vtotal as f64);
-        log::info!("panel {}x{} at {refresh:.3} Hz", mode.hdisplay, mode.vdisplay);
+        log::info!("panel {}x{} (total {}x{}) at {refresh:.3} Hz, {} screen(s)", mode.hdisplay, mode.vdisplay, width, total_height, screens.len());
         if (50.0..70.0).contains(&refresh) {
             PANEL_PERIOD.store((1e9 / refresh) as u64, std::sync::atomic::Ordering::Relaxed);
         }
+        PHYSICAL_PANEL_SIZE.store((width as u64) | ((total_height as u64) << 32), std::sync::atomic::Ordering::Relaxed);
         let surface = call!(
             gbm,
             "gbm_surface_create",
             fn(*mut c_void, u32, u32, u32, u32) -> *mut c_void,
             device,
-            mode.hdisplay as u32,
-            mode.vdisplay as u32,
+            width,
+            total_height,
             GBM_FORMAT_XRGB8888,
             1 | 4
         );
         if surface.is_null() {
             return Err("no GBM surface".into());
         }
-        Ok(Kms { drm, gbm, fd, device, surface, crtc, connector, mode, shown: None, pending: None, set: false, held: [0; 4], held_since: std::time::Instant::now(), last_flip: 0, asked: 0, slack: (0, 0) })
+        Ok(Kms { drm, gbm, fd, device, surface, screens, width, height: total_height, shown: None, pending: None, pending_flips: 0, set: false, held: [0; 4], held_since: std::time::Instant::now(), last_flip: 0, asked: 0, slack: (0, 0) })
     }
 
     fn size(&self) -> (i32, i32) {
-        (self.mode.hdisplay as i32, self.mode.vdisplay as i32)
+        (self.width as i32, self.height as i32)
     }
 
     /// waits for the flip queued last to happen, then lets go of the
@@ -1127,25 +1166,30 @@ impl Kms {
         // SAFETY: as in open, on the descriptor and buffers this holds
         unsafe {
             let mut context = DrmEventContext { version: 2, vblank_handler: None, page_flip_handler: Some(flipped) };
-            let mut poll = libc::pollfd { fd: self.fd, events: libc::POLLIN, revents: 0 };
-            if libc::poll(&mut poll, 1, 100) > 0 {
-                call!(self.drm, "drmHandleEvent", fn(i32, *mut DrmEventContext) -> i32, self.fd, &mut context);
-                let at = FLIPPED_AT.load(std::sync::atomic::Ordering::Relaxed);
-                let slack = FLIPPED_TIME.load(std::sync::atomic::Ordering::Relaxed).wrapping_sub(self.asked);
-                if slack < 100_000 {
-                    PANEL_SLACK.store(slack * 1000, std::sync::atomic::Ordering::Relaxed);
-                    self.slack = (self.slack.0 + slack, self.slack.1 + 1);
-                }
-                let refreshes = at.wrapping_sub(self.last_flip) as usize;
-                if self.last_flip != 0 && refreshes > 0 {
-                    self.held[refreshes.min(4) - 1] += 1;
-                }
-                self.last_flip = at;
-                if self.held_since.elapsed() >= std::time::Duration::from_secs(5) {
-                    let [one, two, three, more] = std::mem::take(&mut self.held);
-                    let (sum, count) = std::mem::take(&mut self.slack);
-                    log::info!("pictures up for 1/2/3/4+ panel refreshes: {one}/{two}/{three}/{more}, handed over {:.1} ms before the refresh", sum as f64 / count.max(1) as f64 / 1000.0);
-                    self.held_since = std::time::Instant::now();
+            while self.pending_flips > 0 {
+                let mut poll = libc::pollfd { fd: self.fd, events: libc::POLLIN, revents: 0 };
+                if libc::poll(&mut poll, 1, 100) > 0 {
+                    call!(self.drm, "drmHandleEvent", fn(i32, *mut DrmEventContext) -> i32, self.fd, &mut context);
+                    self.pending_flips = self.pending_flips.saturating_sub(1);
+                    let at = FLIPPED_AT.load(std::sync::atomic::Ordering::Relaxed);
+                    let slack = FLIPPED_TIME.load(std::sync::atomic::Ordering::Relaxed).wrapping_sub(self.asked);
+                    if slack < 100_000 {
+                        PANEL_SLACK.store(slack * 1000, std::sync::atomic::Ordering::Relaxed);
+                        self.slack = (self.slack.0 + slack, self.slack.1 + 1);
+                    }
+                    let refreshes = at.wrapping_sub(self.last_flip) as usize;
+                    if self.last_flip != 0 && refreshes > 0 {
+                        self.held[refreshes.min(4) - 1] += 1;
+                    }
+                    self.last_flip = at;
+                    if self.held_since.elapsed() >= std::time::Duration::from_secs(5) {
+                        let [one, two, three, more] = std::mem::take(&mut self.held);
+                        let (sum, count) = std::mem::take(&mut self.slack);
+                        log::info!("pictures up for 1/2/3/4+ panel refreshes: {one}/{two}/{three}/{more}, handed over {:.1} ms before the refresh", sum as f64 / count.max(1) as f64 / 1000.0);
+                        self.held_since = std::time::Instant::now();
+                    }
+                } else {
+                    break;
                 }
             }
             if let Some((bo, fb)) = self.shown.replace(pending) {
@@ -1188,32 +1232,43 @@ impl Kms {
                 return Err("could not make a framebuffer".into());
             }
             if !self.set {
-                let mut connector = self.connector;
-                let mut mode = self.mode;
-                let result = call!(
-                    self.drm,
-                    "drmModeSetCrtc",
-                    fn(i32, u32, u32, u32, u32, *mut u32, i32, *mut DrmModeInfo) -> i32,
-                    self.fd,
-                    self.crtc,
-                    fb,
-                    0,
-                    0,
-                    &mut connector,
-                    1,
-                    &mut mode
-                );
-                if result != 0 {
-                    return Err(format!("could not set the display mode, {result}"));
+                for screen in &self.screens {
+                    let mut connector = screen.connector;
+                    let mut mode = screen.mode;
+                    let result = call!(
+                        self.drm,
+                        "drmModeSetCrtc",
+                        fn(i32, u32, u32, u32, u32, *mut u32, i32, *mut DrmModeInfo) -> i32,
+                        self.fd,
+                        screen.crtc,
+                        fb,
+                        screen.offset_x,
+                        screen.offset_y,
+                        &mut connector,
+                        1,
+                        &mut mode
+                    );
+                    if result != 0 {
+                        log::warn!("could not set display mode on connector {}, crtc {}: {result}", screen.connector, screen.crtc);
+                    }
                 }
                 self.set = true;
                 self.shown = Some((bo, fb));
-            } else if call!(self.drm, "drmModePageFlip", fn(i32, u32, u32, u32, *mut c_void) -> i32, self.fd, self.crtc, fb, 1, std::ptr::null_mut()) == 0 {
-                self.asked = monotonic_micros();
-                self.pending = Some((bo, fb));
             } else {
-                call!(self.drm, "drmModeRmFB", fn(i32, u32) -> i32, self.fd, fb);
-                call!(self.gbm, "gbm_surface_release_buffer", fn(*mut c_void, *mut c_void) -> (), self.surface, bo);
+                let mut queued = 0;
+                for screen in &self.screens {
+                    if call!(self.drm, "drmModePageFlip", fn(i32, u32, u32, u32, *mut c_void) -> i32, self.fd, screen.crtc, fb, 1, std::ptr::null_mut()) == 0 {
+                        queued += 1;
+                    }
+                }
+                if queued > 0 {
+                    self.asked = monotonic_micros();
+                    self.pending = Some((bo, fb));
+                    self.pending_flips = queued;
+                } else {
+                    call!(self.drm, "drmModeRmFB", fn(i32, u32) -> i32, self.fd, fb);
+                    call!(self.gbm, "gbm_surface_release_buffer", fn(*mut c_void, *mut c_void) -> (), self.surface, bo);
+                }
             }
         }
         Ok(())
@@ -2907,6 +2962,10 @@ impl Gles {
 
     pub fn scale(&self) -> u32 {
         1
+    }
+
+    pub fn size(&self) -> (i32, i32) {
+        physical_panel_size()
     }
 
     pub fn set_scale(&mut self, _scale: u32) -> u32 {

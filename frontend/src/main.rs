@@ -136,10 +136,21 @@ fn main() {
     }
 
     let read_ahead = readahead::ReadAhead::start(&path, &data, advanced.read_ahead);
+    let panel_size = system.panel_size().unwrap_or((640, 480));
+    log::info!("detected panel size: {}x{}", panel_size.0, panel_size.1);
+
     let pad = Arc::new(Mutex::new(Pad::default()));
     match input::gamepad().filter(|_| std::env::var_os("ZAKURO_INPUT").is_none() && probe.is_none()) {
         Some(device) => input::read_pad(device, pad.clone()),
         None => log::warn!("no gamepad found"),
+    }
+    let touch_state = Arc::new(Mutex::new(input::Touch::default()));
+    match input::touchscreen().filter(|_| std::env::var_os("ZAKURO_INPUT").is_none() && probe.is_none()) {
+        Some(device) => {
+            log::info!("found touchscreen at {device}");
+            input::read_touch(device, touch_state.clone());
+        }
+        None => log::info!("no touchscreen found"),
     }
     let (sound, samples) = mpsc::channel();
     sound::play(samples);
@@ -259,7 +270,7 @@ fn main() {
                     let mut canvas = Canvas::new(&font, PANEL);
                     menu.draw(&mut canvas, &settings, &game, &profile, &title);
                     overlay = Some(Arc::new(canvas.finish()));
-                    system.present_panel(layout::areas(settings.layout, settings.swapped), None, overlay.clone(), settings.smooth, false);
+                    system.present_panel(layout::areas(settings.layout, settings.swapped, panel_size.1), None, overlay.clone(), settings.smooth, false);
                     menu_drawn = true;
                 }
                 std::thread::sleep(frame);
@@ -312,11 +323,13 @@ fn main() {
             cursor.0 = (cursor.0 + input::stick(axes[3]) * step).clamp(0.0, 319.0);
             cursor.1 = (cursor.1 + input::stick(axes[4]) * step).clamp(0.0, 239.0);
         }
+        let hw_touch = touch_state.lock().unwrap().point;
         let touching = keys.contains(&R2) || keys.contains(&R3);
+        let touch = hw_touch.or_else(|| touching.then_some((cursor.0 as u16, cursor.1 as u16)));
         if probe.is_some() && script.is_empty() {
             system.set_input(InputState { buttons: probe::Probe::buttons(frame_number), ..Default::default() });
         } else if script.is_empty() {
-            system.set_input(InputState { buttons, circle_x, circle_y, touch: touching.then_some((cursor.0 as u16, cursor.1 as u16)), tilt });
+            system.set_input(InputState { buttons, circle_x, circle_y, touch, tilt });
         } else {
             system.set_input(scripted_input(&script, frame_number));
         }
@@ -402,8 +415,12 @@ fn main() {
                 }
                 (fps, fps_since) = (0, Instant::now());
             }
-            let areas = layout::areas(settings.layout, settings.swapped);
-            let pointer = areas[1].map(|[x, y, width, height]| (x + (cursor.0 * width as f32 / 320.0) as i32, y + (cursor.1 * height as f32 / 240.0) as i32));
+            let areas = layout::areas(settings.layout, settings.swapped, panel_size.1);
+            let pointer = if hw_touch.is_some() {
+                None
+            } else {
+                areas[1].map(|[x, y, width, height]| (x + (cursor.0 * width as f32 / 320.0) as i32, y + (cursor.1 * height as f32 / 240.0) as i32))
+            };
             system.present_panel(areas, pointer, overlay.clone(), settings.smooth, interpolating);
         }
 

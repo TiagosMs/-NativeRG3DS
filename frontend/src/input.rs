@@ -48,6 +48,11 @@ pub struct Pad {
     pub axes: [i32; 8],
 }
 
+#[derive(Default)]
+pub struct Touch {
+    pub point: Option<(u16, u16)>,
+}
+
 pub fn gamepad() -> Option<String> {
     let devices = std::fs::read_to_string("/proc/bus/input/devices").ok()?;
     devices.split("\n\n").find_map(|block| {
@@ -61,6 +66,68 @@ pub fn gamepad() -> Option<String> {
     })
 }
 
+pub fn touchscreen() -> Option<String> {
+    let devices = std::fs::read_to_string("/proc/bus/input/devices").ok()?;
+    let mut chosen = None;
+    for block in devices.split("\n\n") {
+        let name = block.lines().find_map(|line| line.strip_prefix("N: Name="))?;
+        if name.to_lowercase().contains("touchscreen") {
+            let handlers = block.lines().find_map(|line| line.strip_prefix("H: Handlers="))?;
+            let event = handlers.split_whitespace().find(|handler| handler.starts_with("event"))?;
+            let sysfs = block.lines().find_map(|line| line.strip_prefix("S: Sysfs="))?;
+            // Prefer bottom screen on RG DS (i2c-3) if present
+            if sysfs.contains("i2c-3") {
+                return Some(format!("/dev/input/{event}"));
+            }
+            if chosen.is_none() {
+                chosen = Some(format!("/dev/input/{event}"));
+            }
+        }
+    }
+    chosen
+}
+
+pub fn read_touch(path: String, touch: Arc<Mutex<Touch>>) {
+    std::thread::spawn(move || {
+        let Ok(mut device) = std::fs::File::open(&path) else {
+            log::error!("could not open touchscreen {path}");
+            return;
+        };
+        let mut event = [0u8; 24];
+        let mut cur_x = 0i32;
+        let mut cur_y = 0i32;
+        let mut down = false;
+        while device.read_exact(&mut event).is_ok() {
+            let kind = u16::from_ne_bytes([event[16], event[17]]);
+            let code = u16::from_ne_bytes([event[18], event[19]]);
+            let value = i32::from_ne_bytes([event[20], event[21], event[22], event[23]]);
+            match kind {
+                1 if code == 330 => { // BTN_TOUCH
+                    down = value != 0;
+                    if !down {
+                        let mut t = touch.lock().unwrap();
+                        t.point = None;
+                    }
+                }
+                3 if code == 0x35 || code == 0 => { // ABS_MT_POSITION_X or ABS_X
+                    cur_x = value;
+                }
+                3 if code == 0x36 || code == 1 => { // ABS_MT_POSITION_Y or ABS_Y
+                    cur_y = value;
+                }
+                0 if down => { // EV_SYN
+                    // Map 640x480 to 3DS 320x240 (divide by 2)
+                    let x_3ds = (cur_x as f32 / 2.0).clamp(0.0, 319.0) as u16;
+                    let y_3ds = (cur_y as f32 / 2.0).clamp(0.0, 239.0) as u16;
+                    let mut t = touch.lock().unwrap();
+                    t.point = Some((x_3ds, y_3ds));
+                }
+                _ => {}
+            }
+        }
+    });
+}
+
 pub fn read_pad(path: String, pad: Arc<Mutex<Pad>>) {
     std::thread::spawn(move || {
         let Ok(mut device) = std::fs::File::open(&path) else {
@@ -72,13 +139,20 @@ pub fn read_pad(path: String, pad: Arc<Mutex<Pad>>) {
             let kind = u16::from_ne_bytes([event[16], event[17]]);
             let code = u16::from_ne_bytes([event[18], event[19]]);
             let value = i32::from_ne_bytes([event[20], event[21], event[22], event[23]]);
+            let normalized_code = match code {
+                314 => SELECT, // Standard Linux Joypad SELECT
+                315 => START,  // Standard Linux Joypad START
+                316 => FN,     // Standard Linux Joypad BTN_MODE / Home
+                318 => R3,     // Standard Linux Joypad R3
+                _ => code,
+            };
             let mut pad = pad.lock().unwrap();
             match kind {
                 1 if value == 0 => {
-                    pad.keys.remove(&code);
+                    pad.keys.remove(&normalized_code);
                 }
                 1 => {
-                    pad.keys.insert(code);
+                    pad.keys.insert(normalized_code);
                 }
                 3 if (code as usize) < pad.axes.len() => pad.axes[code as usize] = value,
                 _ => {}

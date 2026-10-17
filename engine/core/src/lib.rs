@@ -1016,6 +1016,11 @@ impl System {
         screen_pixels(&mut self.gpu, &mut guest, screen, self.lcd_force_black)
     }
 
+    /// the physical display size (width, height), or None when not using a panel.
+    pub fn panel_size(&self) -> Option<(i32, i32)> {
+        self.gpu.panel_size()
+    }
+
     /// a one-line summary for the window title and the log.
     pub fn status_line(&self) -> String {
         let mut line = format!(

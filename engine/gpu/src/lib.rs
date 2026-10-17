@@ -928,6 +928,15 @@ impl Gpu {
         1
     }
 
+    /// the physical display size (width, height), or None when not using a panel.
+    pub fn panel_size(&self) -> Option<(i32, i32)> {
+        #[cfg(feature = "gles")]
+        if let Some(hardware) = self.resources.hardware.as_ref().or(self.panel.as_ref()) {
+            return Some(hardware.size());
+        }
+        None
+    }
+
     /// the newest picture the host's GPU drew for a screen's buffer, at the
     /// scale it draws at, while guest memory still holds the same picture.
     /// size is the pixels of a row the screen shows and its rows, stride the
