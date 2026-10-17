@@ -1,31 +1,28 @@
-# Pocket Native
+# -NativeRG3DS (Pocket Native for Anbernic RG DS)
 
-If you have not used it before, [start here](START_HERE.md). The short
-version: there is no app to install and no game included, a PC rebuilds
-each game first (drop it on `Build a game`).
+Nintendo 3DS games, recompiled ahead of time (AOT), running natively on the **Anbernic RG DS** dual-screen handheld under **ROCKNIX**.
 
-Nintendo 3DS games, recompiled ahead of time, running natively on cheap
-Linux handhelds. Made for the R36S and its Mali-G31 GPU under ArkOS.
+This fork adds full support for the Anbernic RG DS hardware and a dedicated web management tool:
 
-Pocket Native is a fork of [Zakuro](https://github.com/fearkov/zakuro) and
-[3dsrecomp](https://github.com/fearkov/3dsrecomp) by fearkov. Zakuro is a
-3DS emulator that runs a game's code recompiled to C instead of through a
-JIT, and it does the heavy lifting here. This fork adds:
+- **NativeRG3DS Studio (`./gui.sh`)**: A web interface running locally on your PC to inspect decrypted 3DS ROMs, configure performance profiles, recompile via Docker, and deploy directly to the RG DS over Wi-Fi (SCP) with 1 click.
+- **Physical Dual-Screen KMS (640x960)**: Direct hardware rendering across both screens (Top 3DS screen on `DSI-2` 640x480, Bottom 3DS touchscreen on `DSI-1` 640x480).
+- **Capacitive Touchscreen Support**: Hardware touch input mapped directly on `/dev/input/event1` (`Goodix Capacitive TouchScreen` on `i2c-3`).
+- **Mali-G52 OpenGL ES 3.2**: Driver compatibility with ROCKNIX using `eglGetPlatformDisplay(EGL_PLATFORM_GBM_KHR, ...)` and high-performance GPU scaling (800 MHz).
+- **Gamepad Integration**: Out-of-the-box support for `retrogame_joypad` buttons and analog circle pads.
+- **Clean EmulationStation Handover**: Returns to EmulationStation without black screens or frozen scratchpad windows upon exit.
 
-- an OpenGL ES 3.1 renderer for the handheld's GPU, tuned for Mali (the
-  R36S has no Vulkan driver)
-- a frontend for handhelds without a desktop: the screens go to the panel
-  through KMS, buttons come from evdev, sound goes out through ALSA
-- an in-game menu for layout, frame rate, power, controls and per-game
-  settings, with a line of help for every setting
-- per-game profiles in `titles/`, and a probe mode for trying new games
-- a build that turns your own game dump into a folder for the SD card:
-  drop the game on `Build a game`, on Windows or Linux
-- an updater that brings the kit up to the latest release and builds
-  your games again with it
+Pocket Native is based on [Zakuro](https://github.com/fearkov/zakuro) and [3dsrecomp](https://github.com/fearkov/3dsrecomp) by fearkov, and [pocket-native](https://github.com/whovian64/pocket-native) by whovian64.
 
-The Android app and the Vulkan renderer of upstream Zakuro are not part of
-this fork.
+## Quick Start (NativeRG3DS Studio)
+
+To port and deploy any decrypted 3DS game:
+
+```bash
+./gui.sh
+```
+
+This starts the Studio on `http://127.0.0.1:8383` and opens your browser. Select your decrypted `.3ds`/`.cci`/`.cia` file, tune options, and click **"Iniciar Recompilação e Portar para RG DS"**.
+
 
 ## Games
 
