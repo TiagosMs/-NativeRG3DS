@@ -57,7 +57,8 @@ pub fn gamepad() -> Option<String> {
     let devices = std::fs::read_to_string("/proc/bus/input/devices").ok()?;
     devices.split("\n\n").find_map(|block| {
         let name = block.lines().find_map(|line| line.strip_prefix("N: Name="))?;
-        if !name.contains("Gamepad") && !name.contains("Controller") && !name.contains("Joypad") {
+        let name_lower = name.to_lowercase();
+        if !name_lower.contains("gamepad") && !name_lower.contains("controller") && !name_lower.contains("joypad") {
             return None;
         }
         let handlers = block.lines().find_map(|line| line.strip_prefix("H: Handlers="))?;
