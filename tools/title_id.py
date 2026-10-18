@@ -16,8 +16,9 @@ with open(sys.argv[1], "rb") as rom:
     ncch = rom.read(0x200)
     if ncch[0x100:0x104] != b"NCCH":
         sys.exit("the image's first partition is not an NCCH")
-    # flags[7] bit 2, no crypto; or ExHeader already decrypted (starts with CtrApp)
-    exheader = rom.read(16)
-    if not (ncch[0x18F] & 0x4 or exheader.startswith(b"CtrApp")):
+    # flags[7] bit 2, no crypto; or ExHeader text address is 0x100000 (standard for decrypted 3DS executables)
+    exheader = rom.read(32)
+    is_decrypted = bool((ncch[0x18F] & 0x4) or exheader.startswith(b"CtrApp") or (len(exheader) >= 20 and struct.unpack_from("<I", exheader, 0x10)[0] == 0x100000))
+    if not is_decrypted:
         sys.exit("the image is encrypted: decrypt it first (GodMode9: Decrypt file), or build from the .cia with --keys")
 print(f"{title_id:016X}")

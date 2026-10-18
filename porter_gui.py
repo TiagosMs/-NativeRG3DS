@@ -71,8 +71,8 @@ def inspect_rom_file(path_str: str) -> dict:
             if len(ncch) < 0x200 or ncch[0x100:0x104] != b"NCCH":
                 return {"error": "A partição primária da ROM não é um NCCH válido."}
             prod_code = ncch[0x150:0x160].rstrip(b"\x00").decode("latin1", errors="replace")
-            exheader = f.read(16)
-            is_decrypted = bool((ncch[0x18F] & 0x4) or exheader.startswith(b"CtrApp"))
+            exheader = f.read(32)
+            is_decrypted = bool((ncch[0x18F] & 0x4) or exheader.startswith(b"CtrApp") or (len(exheader) >= 20 and struct.unpack_from("<I", exheader, 0x10)[0] == 0x100000))
             
             title_id_hex = f"{title_id:016X}"
             
