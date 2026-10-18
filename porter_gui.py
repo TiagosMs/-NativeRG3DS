@@ -294,8 +294,8 @@ def run_build_thread(rom_path_str: str, title_name: str, options: dict, deploy_i
             game_local = BUILD_DIR / "Pocket Native" / "pocket-native" / "games" / title_id
             pn_local = BUILD_DIR / "Pocket Native" / "pocket-native"
             
-            add_log(f"Enviando pasta do jogo {title_id}...")
             subprocess.run(["ssh", f"root@{deploy_ip}", f"mkdir -p '/storage/roms/ports/Pocket Native/pocket-native/games/{title_id}'"], check=True)
+            subprocess.run(["ssh", f"root@{deploy_ip}", "ln -sfn '/storage/roms/ports/Pocket Native/pocket-native' '/storage/roms/ports/pocket-native'"], check=True)
             subprocess.run(["scp", "-r", str(game_local), f"root@{deploy_ip}:/storage/roms/ports/Pocket Native/pocket-native/games/"], check=True)
 
             set_progress(90, "Enviando binários e scripts do console...")
