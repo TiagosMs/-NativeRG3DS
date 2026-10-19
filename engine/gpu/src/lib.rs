@@ -17,7 +17,7 @@ use registers::*;
 pub use overlay::{Overlay, OverlayMesh, OverlayTexture, OverlayVertex};
 pub use renderer::{DrawCall, Renderer, SoftwareRenderer};
 #[cfg(feature = "gles")]
-pub use raster::gles::{panel_timing, set_drops};
+pub use raster::gles::{layout_size, panel_timing, set_drops};
 
 /// how the GPU reaches guest memory.
 pub trait GpuMemory {
@@ -166,7 +166,8 @@ pub(crate) mod speedup {
     pub const PLAIN_MATH: u32 = 4;
     /// depth tiles one surface drew over another's taken over on the GPU.
     pub const TILES: u32 = 8;
-    /// fills of a whole surface cleared on the GPU alone.
+    /// fills of a whole surface cleared on the GPU alone, and the depth a
+    /// fill runs over in part left out of memory.
     pub const CLEARS: u32 = 16;
     /// vertex arrays kept in buffers on the GPU.
     pub const ARRAYS: u32 = 32;

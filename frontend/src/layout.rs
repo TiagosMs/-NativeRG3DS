@@ -1,9 +1,13 @@
-//! where the screens go on a panel, left, top, width and height.
+//! where the screens go, left, top, width and height, in the size the GPU
+//! lays them out in: 640x480 on the R36S, the panel's shape on others.
 
 use crate::settings::Layout;
 
-pub fn areas(layout: Layout, swapped: bool, panel_height: i32) -> [Option<[i32; 4]>; 2] {
-    if panel_height >= 960 {
+const TOP: [f32; 2] = [400.0, 240.0];
+const BOTTOM: [f32; 2] = [320.0, 240.0];
+
+pub fn areas(layout: Layout, swapped: bool, (width, height): (u32, u32)) -> [Option<[i32; 4]>; 2] {
+    if height >= 960 {
         // Dual screen mode (RG DS: top panel 640x480 at Y:0..480, bottom panel 640x480 at Y:480..960)
         let (first, second) = match layout {
             Layout::TopOnly => (Some([0, 48, 640, 384]), None),
@@ -19,19 +23,57 @@ pub fn areas(layout: Layout, swapped: bool, panel_height: i32) -> [Option<[i32; 
             [first, second]
         }
     } else {
+        let (width, height) = (width as i32, height as i32);
+        let (first, second) = if swapped { (BOTTOM, TOP) } else { (TOP, BOTTOM) };
+        let size = |screen: [f32; 2], scale: f32| [(screen[0] * scale).round() as i32, (screen[1] * scale).round() as i32];
+        // as big as fits across and down
+        let fit = |across: f32, down: f32| (width as f32 / across).min(height as f32 / down);
         let [first, second] = match layout {
-            // the first screen 1.3 times over, the second smaller under it
-            Layout::BigTop if swapped => [Some([112, 0, 416, 312]), Some([180, 312, 280, 168])],
-            Layout::BigTop => [Some([60, 0, 520, 312]), Some([208, 312, 224, 168])],
-            Layout::TopOnly if swapped => [Some([0, 0, 640, 480]), None],
-            Layout::TopOnly => [Some([0, 48, 640, 384]), None],
-            // both across the panel, eight ninths of their size
-            Layout::SideBySide if swapped => [Some([0, 133, 284, 213]), Some([284, 133, 356, 213])],
-            Layout::SideBySide => [Some([0, 133, 356, 213]), Some([356, 133, 284, 213])],
-            Layout::Original if swapped => [Some([160, 0, 320, 240]), Some([120, 240, 400, 240])],
-            Layout::Original => [Some([120, 0, 400, 240]), Some([160, 240, 320, 240])],
+            // the first screen 1.3 times over, the second 0.7 times under it,
+            // or both as they are
+            Layout::BigTop | Layout::Original => {
+                let (big, small) = if layout == Layout::BigTop { (1.3, 0.7) } else { (1.0, 1.0) };
+                let scale = fit((first[0] * big).max(second[0] * small), 240.0 * (big + small));
+                let ([a, b], [c, d]) = (size(first, big * scale), size(second, small * scale));
+                let top = (height - b - d) / 2;
+                [Some([(width - a) / 2, top, a, b]), Some([(width - c) / 2, top + b, c, d])]
+            }
+            Layout::TopOnly => {
+                let [a, b] = size(first, fit(first[0], first[1]));
+                [Some([(width - a) / 2, (height - b) / 2, a, b]), None]
+            }
+            // both across the panel
+            Layout::SideBySide => {
+                let scale = fit(first[0] + second[0], 240.0);
+                let ([a, b], [c, d]) = (size(first, scale), size(second, scale));
+                let left = (width - a - c) / 2;
+                [Some([left, (height - b) / 2, a, b]), Some([left + a, (height - d) / 2, c, d])]
+            }
         };
         if swapped { [second, first] } else { [first, second] }
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// the R36S's 640x480 keeps the places the layouts always had.
+    #[test]
+    fn r36s_places_stay() {
+        let r36s = (640, 480);
+        let cases = [
+            (Layout::BigTop, false, [Some([60, 0, 520, 312]), Some([208, 312, 224, 168])]),
+            (Layout::BigTop, true, [Some([180, 312, 280, 168]), Some([112, 0, 416, 312])]),
+            (Layout::TopOnly, false, [Some([0, 48, 640, 384]), None]),
+            (Layout::TopOnly, true, [None, Some([0, 0, 640, 480])]),
+            (Layout::SideBySide, false, [Some([0, 133, 356, 213]), Some([356, 133, 284, 213])]),
+            (Layout::SideBySide, true, [Some([284, 133, 356, 213]), Some([0, 133, 284, 213])]),
+            (Layout::Original, false, [Some([120, 0, 400, 240]), Some([160, 240, 320, 240])]),
+            (Layout::Original, true, [Some([120, 240, 400, 240]), Some([160, 0, 320, 240])]),
+        ];
+        for (layout, swapped, expected) in cases {
+            assert_eq!(areas(layout, swapped, r36s), expected, "{layout:?} swapped {swapped}");
+        }
+    }
+}

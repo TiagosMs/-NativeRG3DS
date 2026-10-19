@@ -130,7 +130,7 @@ Saves, the game's own settings and its log go in
 
 | Hotkey | Does |
 |---|---|
-| Tap FN | Opens the menu and pauses the game |
+| Tap FN, or L3 + R2 | Opens the menu and pauses the game |
 | FN + Start | Quits |
 | Tap L2, or FN + L1 | Swaps the screens |
 | FN + R1 | Switches between both screens and one big screen |

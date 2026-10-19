@@ -4,10 +4,11 @@
 //!
 //! ZAKURO_KMS=1 ZAKURO_RECOMPILED=title.so ZAKURO_DATA=dir pocket-native <rom>
 //!
-//! A tap of FN opens the menu, FN+Start quits, a tap of L2 or FN+L1 swaps
-//! the screens, FN+R1 shows both or one big, the right stick moves the touch
-//! cursor and R2 touches, or tilts the console with L2 held. Reset in the
-//! menu exits with 3, for the launcher to start the game again.
+//! A tap of FN, or L3 and R2 together, opens the menu, FN+Start quits, a tap
+//! of L2 or FN+L1 swaps the screens, FN+R1 shows both or one big, the right
+//! stick moves the touch cursor and R2 touches, or tilts the console with L2
+//! held. Reset in the menu exits with 3, for the launcher to start the game
+//! again.
 //!
 //! pocket-native --probe <rom> [frames] tries a game as fast as it runs and
 //! writes a report of how it went, see probe.rs.
@@ -33,7 +34,7 @@ use zakuro_core::{loader, Config, FrameOutcome, System};
 use zakuro_gpu::Overlay;
 
 use crate::font::{Canvas, Font};
-use crate::input::{Pad, FN, L1, L2, R1, R2, R3, START};
+use crate::input::{Pad, FN, L1, L2, L3, R1, R2, R3, START};
 use crate::menu::{Action, Menu, Status};
 use crate::profile::Profile;
 use crate::settings::{Advanced, GameSettings, Layout, Power, Settings};
@@ -141,9 +142,9 @@ fn main() {
 
     let pad = Arc::new(Mutex::new(Pad::default()));
     match input::gamepad().filter(|_| std::env::var_os("ZAKURO_INPUT").is_none() && probe.is_none()) {
-        Some(device) => {
-            log::info!("found gamepad at {device}");
-            input::read_pad(device, pad.clone());
+        Some((device, name)) => {
+            log::info!("found gamepad at {device} ({name})");
+            input::read_pad(device, name, pad.clone());
         }
         None => log::warn!("no gamepad found"),
     }
@@ -195,16 +196,18 @@ fn main() {
     // as boot takes it
     let script = std::env::var("ZAKURO_INPUT").map(|spec| parse_input_script(&spec)).unwrap_or_default();
     // ZAKURO_SHOT_AT=frame,frame saves both screens at those frames into the
-    // temporary directory, as boot does
+    // temporary directory, as boot does, or a probe's directory in place of
+    // its own eight
     // ZAKURO_HOST_PROFILE=from,frames samples where this process's threads
     // spend their time over those frames, into the temporary directory
     let host_profile = std::env::var("ZAKURO_HOST_PROFILE").ok().and_then(|spec| {
         let (from, frames) = spec.split_once(',')?;
         Some((from.parse::<u64>().ok()?, frames.parse::<u64>().ok()?))
     });
-    let shots: HashSet<u64> = match &probe {
-        Some(probe) => probe.shot_frames(),
-        None => std::env::var("ZAKURO_SHOT_AT").unwrap_or_default().split(',').filter_map(|frame| frame.parse().ok()).collect(),
+    let shots: HashSet<u64> = match (&probe, std::env::var("ZAKURO_SHOT_AT")) {
+        (_, Ok(frames)) => frames.split(',').filter_map(|frame| frame.parse().ok()).collect(),
+        (Some(probe), Err(_)) => probe.shot_frames(),
+        (None, Err(_)) => HashSet::new(),
     };
     let mut stopped = None;
     let keys_script = std::env::var("ZAKURO_KEYS").map(|spec| input::parse_keys(&spec)).unwrap_or_default();
@@ -235,6 +238,8 @@ fn main() {
         }
         let tapped = fn_alone && held.contains(&FN) && !keys.contains(&FN);
         fn_alone &= !tapped;
+        // L3 and R2 together do the same, for handhelds with no FN
+        let tapped = tapped || [L3, R2].iter().all(|key| keys.contains(key)) && ![L3, R2].iter().all(|key| held.contains(key));
 
         if menu.open || tapped {
             let action = if !menu.open {
@@ -273,7 +278,7 @@ fn main() {
                     let mut canvas = Canvas::new(&font, PANEL);
                     menu.draw(&mut canvas, &settings, &game, &profile, &title);
                     overlay = Some(Arc::new(canvas.finish()));
-                    system.present_panel(layout::areas(settings.layout, settings.swapped, panel_size.1), None, overlay.clone(), settings.smooth, false);
+                    system.present_panel(layout::areas(settings.layout, settings.swapped, zakuro_gpu::layout_size()), None, overlay.clone(), settings.smooth, false);
                     menu_drawn = true;
                 }
                 std::thread::sleep(frame);
@@ -418,7 +423,7 @@ fn main() {
                 }
                 (fps, fps_since) = (0, Instant::now());
             }
-            let areas = layout::areas(settings.layout, settings.swapped, panel_size.1);
+            let areas = layout::areas(settings.layout, settings.swapped, zakuro_gpu::layout_size());
             let pointer = if hw_touch.is_some() {
                 None
             } else {
