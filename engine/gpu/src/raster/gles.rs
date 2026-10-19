@@ -1955,22 +1955,22 @@ impl Egl {
             let gles = open(gles_names).ok();
             let loaded = egl::Egl::load_with(|name| symbol(&library, name));
 
+            const EGL_PLATFORM_GBM_KHR: u32 = 0x31D7;
             let (mut major, mut minor) = (0, 0);
-            let mut display = loaded.GetDisplay(kms.device as glutin_egl_sys::EGLNativeDisplayType);
+            let platform = ["eglGetPlatformDisplay", "eglGetPlatformDisplayEXT"]
+                .iter()
+                .map(|name| symbol(&library, name))
+                .find(|address| !address.is_null());
+            let mut display = if let Some(address) = platform {
+                let get: extern "C" fn(u32, *mut c_void, *const i32) -> egl::types::EGLDisplay = std::mem::transmute(address);
+                get(EGL_PLATFORM_GBM_KHR, kms.device, std::ptr::null())
+            } else {
+                std::ptr::null()
+            };
             let mut ready = !display.is_null() && loaded.Initialize(display, &mut major, &mut minor) != 0;
             if !ready {
-                // the Mali blob's legacy eglGetDisplay returns no display for
-                // a GBM device (g29p1 on the RG52 Mini); the platform call works
-                const EGL_PLATFORM_GBM_KHR: u32 = 0x31D7;
-                let platform = ["eglGetPlatformDisplay", "eglGetPlatformDisplayEXT"]
-                    .iter()
-                    .map(|name| symbol(&library, name))
-                    .find(|address| !address.is_null());
-                if let Some(address) = platform {
-                    let get: extern "C" fn(u32, *mut c_void, *const i32) -> egl::types::EGLDisplay = std::mem::transmute(address);
-                    display = get(EGL_PLATFORM_GBM_KHR, kms.device, std::ptr::null());
-                    ready = !display.is_null() && loaded.Initialize(display, &mut major, &mut minor) != 0;
-                }
+                display = loaded.GetDisplay(kms.device as glutin_egl_sys::EGLNativeDisplayType);
+                ready = !display.is_null() && loaded.Initialize(display, &mut major, &mut minor) != 0;
             }
             if !ready {
                 return Err(format!("could not initialize EGL on the GBM device, 0x{:X}, {}", loaded.GetError(), drawing_libraries()));
