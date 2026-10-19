@@ -1858,7 +1858,7 @@ fn gbm_display(loaded: &egl::Egl) -> Option<egl::types::EGLDisplay> {
                 return None;
             }
             let device = create(fd);
-            let display = get_gbm_display(loaded, device);
+            let display = if device.is_null() { std::ptr::null() } else { loaded.GetDisplay(device as glutin_egl_sys::EGLNativeDisplayType) };
             if display.is_null() {
                 libc::close(fd);
                 return None;

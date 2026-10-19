@@ -228,6 +228,7 @@ pub fn read_pad(path: String, name: String, pad: Arc<Mutex<Pad>>) {
             }
         }
     });
+}
 
 
 /// an H700 handheld's button as the R36S numbers it.
